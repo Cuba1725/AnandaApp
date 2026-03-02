@@ -33,7 +33,7 @@ with st.sidebar:
         Tema: {tema_azar}. 
         REGLAS:
         - No uses muletillas como 'che', 'mirá', 'ni ahí' o 'copado'.
-        - Usá un voseo sutil y natural (ej: 'fijate', 'tené en cuenta').
+        - Usá un voseo sutil y natural.
         - Que el tono sea calmo, sabio y breve. 
         - Evitá los clichés adolescentes.
         """
@@ -91,3 +91,4 @@ if prompt := st.chat_input("¿Qué necesitás integrar hoy?"):
         st.session_state.messages.append({"role": "assistant", "content": respuesta})
     except Exception as e:
         st.error("Ananda está en silencio por un momento... intentá de nuevo.")
+
