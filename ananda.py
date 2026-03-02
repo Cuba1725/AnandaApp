@@ -1,92 +1,142 @@
 import streamlit as st
 from groq import Groq
 import os
-import random
+import sqlite3
+from datetime import datetime
 from dotenv import load_dotenv
 
-# 1. CONFIGURACIÓN E HISTORIAL
+# 1. CONFIGURACIÓN
 load_dotenv()
 api_key = os.getenv("GROQ_API_KEY")
+st.set_page_config(page_title="Ananda: Mentor Akáshico", page_icon="📖", layout="wide")
 
-st.set_page_config(page_title="Ananda: Mentora Akáshico", page_icon="📖")
+# Gestión de Base de Datos
+def init_db():
+    conn = sqlite3.connect('ananda_akasha.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS sessions 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, date DATETIME)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS messages
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, 
+                  role TEXT, content TEXT, timestamp DATETIME)''')
+    conn.commit()
+    conn.close()
 
-# Inicializamos el historial si no existe
-# --- ACTUALIZACIÓN DEL SYSTEM PROMPT ---
-if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {
-            "role": "system", 
-            "content": """Sos Ananda, mentora experta en Registros Akáshicos. Tu función es acompañar a lectoras a profundizar en sus propias canalizaciones.
+def update_session_name(session_id, new_name):
+    conn = sqlite3.connect('ananda_akasha.db')
+    c = conn.cursor()
+    c.execute("UPDATE sessions SET name = ? WHERE id = ?", (new_name, session_id))
+    conn.commit()
+    conn.close()
 
-            MÉTODO DE TRABAJO (INDAGACIÓN):
-            1. No des interpretaciones cerradas de entrada. Si el usuario te trae un símbolo o visión aislada (ej: "un pájaro azul"), tu prioridad es hacer preguntas de contexto.
-            2. PREGUNTAS CLAVE: Preguntá sobre el entorno de la visión, sensaciones corporales, emociones presentes, o si hubo otros elementos (colores, sonidos, presencias).
-            3. CO-CREACIÓN: Ayudá a que la lectora encuentre el significado por sí misma antes de proponer vos una decodificación metafísica.
-            
-            PERSONALIDAD:
-            - Hablás de 'vos' de forma natural y profesional.
-            - Sos serena, madura y evitás el lenguaje informal exagerado.
-            - Tu objetivo es la claridad y el anclaje del mensaje.
-            
-            REGLA DE RESPUESTA:
-            - Ante mensajes cortos o ambiguos, respondé siempre con 2 o 3 preguntas inquisitivas para abrir el registro antes de concluir algo."""
-        }
-    ]
+def get_sessions():
+    conn = sqlite3.connect('ananda_akasha.db')
+    c = conn.cursor()
+    c.execute("SELECT id, name FROM sessions ORDER BY date DESC")
+    sessions = c.fetchall()
+    conn.close()
+    return sessions
+
+def create_session(name="Nueva Consulta"):
+    conn = sqlite3.connect('ananda_akasha.db')
+    c = conn.cursor()
+    c.execute("INSERT INTO sessions (name, date) VALUES (?, ?)", (name, datetime.now()))
+    session_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    return session_id
+
+def save_message(session_id, role, content):
+    conn = sqlite3.connect('ananda_akasha.db')
+    c = conn.cursor()
+    c.execute("INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
+              (session_id, role, content, datetime.now()))
+    conn.commit()
+    conn.close()
+
+def load_messages(session_id):
+    conn = sqlite3.connect('ananda_akasha.db')
+    c = conn.cursor()
+    c.execute("SELECT role, content FROM messages WHERE session_id = ? ORDER BY timestamp ASC", (session_id,))
+    msgs = c.fetchall()
+    conn.close()
+    return [{"role": m[0], "content": m[1]} for m in msgs]
+
+init_db()
 
 # 2. PANEL LATERAL
 with st.sidebar:
-    st.title("📖 Herramientas del Lector")
-    
-    if st.button("✨ Oráculo de Frecuencia"):
-        temas = ["Claridad", "Sutileza", "Anclaje", "Discernimiento", "Entrega"]
-        tema_azar = random.choice(temas)
-        prompt_or = f"Como mentora akáshica, da un consejo breve sobre: {tema_azar}. Usá voseo maduro, máximo 30 palabras."
-        
-        try:
-            client = Groq(api_key=api_key)
-            resp = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": prompt_or}],
-                temperature=0.6,
-                max_tokens=80
-            )
-            st.info(f"**{tema_azar}:**")
-            st.write(resp.choices[0].message.content)
-        except:
-            st.error("Error de conexión.")
-    
-    st.divider()
-    if st.button("🗑️ Borrar Sesión Actual"):
-        st.session_state.messages = [st.session_state.messages[0]]
+    st.title("📚 Mis Registros")
+    if st.button("➕ Nueva Consulta"):
+        st.session_state.current_session = create_session()
         st.rerun()
 
-# 3. INTERFAZ DE CHAT
-st.title("📖 Ananda: Mentora de Registros")
-st.caption("Escribí las visiones o mensajes que recibiste para que te ayude a decodificarlos.")
+    st.divider()
+    sessions = get_sessions()
+    for s_id, s_name in sessions:
+        if st.button(f"📖 {s_name}", key=f"sess_{s_id}"):
+            st.session_state.current_session = s_id
+            st.rerun()
 
-# Mostrar historial
-for msg in st.session_state.messages:
-    if msg["role"] != "system":
-        st.chat_message(msg["role"]).write(msg["content"])
+# 3. LÓGICA DE SESIÓN
+if "current_session" not in st.session_state:
+    if sessions:
+        st.session_state.current_session = sessions[0][0]
+    else:
+        st.session_state.current_session = create_session()
 
-# Entrada de usuario
-if prompt := st.chat_input("¿Qué mensaje bajó hoy?"):
-    st.session_state.messages.append({"role": "user", "content": prompt})
+chat_history = load_messages(st.session_state.current_session)
+
+# SYSTEM PROMPT AJUSTADO AL "PUNTO MEDIO"
+system_prompt = {
+    "role": "system", 
+    "content": """Sos Ananda, mentora en Registros Akáshicos. 
+    Tu objetivo es ayudar a interpretar visiones de forma responsable.
+    
+    PROTOCOLO DE RESPUESTA:
+    1. INDAGACIÓN: Ante una visión nueva, debés hacer exactamente 4 preguntas clave (entorno, sensaciones, otros elementos, contexto emocional).
+    2. DEVOLUCIÓN: Una vez que el usuario responda, ofrecé una interpretación integradora. 
+    3. VALIDACIÓN: Al final de tu devolución, preguntá siempre si esto le hace sentido o resuena con lo que sintió en el registro.
+    
+    TONO: Hablás de 'vos' natural. Sos madura, serena y concisa (máximo 2 párrafos)."""
+}
+
+st.title("📖 Ananda: Mentor de Registros")
+
+for msg in chat_history:
+    st.chat_message(msg["role"]).write(msg["content"])
+
+if prompt := st.chat_input("¿Qué bajó en el registro?"):
     st.chat_message("user").write(prompt)
+    save_message(st.session_state.current_session, "user", prompt)
+    
+    # 4. GENERACIÓN DE TÍTULO AUTOMÁTICO (Si es el primer mensaje)
+    if len(chat_history) == 0:
+        try:
+            client = Groq(api_key=api_key)
+            title_gen = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": f"Generá un título de 3 palabras para esta consulta akáshica: {prompt}"}],
+                max_tokens=10
+            )
+            nuevo_titulo = title_gen.choices[0].message.content.replace('"', '')
+            update_session_name(st.session_state.current_session, nuevo_titulo)
+        except:
+            pass
 
+    # RESPUESTA DE ANANDA
+    api_messages = [system_prompt] + chat_history + [{"role": "user", "content": prompt}]
     try:
         client = Groq(api_key=api_key)
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
-            messages=st.session_state.messages,
-            temperature=0.6, 
-            max_tokens=400, # Límite de palabras para evitar que sea larguera
-            presence_penalty=0.5,
-            frequency_penalty=0.8
+            messages=api_messages,
+            temperature=0.5,
+            max_tokens=500
         )
-        
-        respuesta = response.choices[0].message.content
-        st.chat_message("assistant").write(respuesta)
-        st.session_state.messages.append({"role": "assistant", "content": respuesta})
-    except Exception as e:
-        st.error("Ananda está en silencio...")
+        ans = response.choices[0].message.content
+        st.chat_message("assistant").write(ans)
+        save_message(st.session_state.current_session, "assistant", ans)
+        if len(chat_history) == 0: st.rerun() # Para actualizar el título en el sidebar
+    except:
+        st.error("Error de conexión.")
