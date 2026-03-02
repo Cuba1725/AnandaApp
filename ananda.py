@@ -4,7 +4,7 @@ import os
 import random
 from dotenv import load_dotenv
 
-# 1. CONFIGURACIÓN INICIAL
+# 1. CONFIGURACIÓN
 load_dotenv()
 api_key = os.getenv("GROQ_API_KEY")
 
@@ -19,28 +19,23 @@ def calcular_mision_vida(fecha):
         resultado = sum(int(d) for d in str(resultado))
     return resultado
 
-# 3. PANEL LATERAL (EL ORÁCULO RECARGADO)
+# 3. PANEL LATERAL (ORÁCULO MÁS SERIO)
 with st.sidebar:
-    st.title("🔮 Herramientas Místicas")
-    st.write("¿Qué te dice el universo hoy?")
+    st.title("🔮 Oráculo de Conciencia")
+    st.write("Un mensaje para reflexionar en tu presente.")
     
-    if st.button("✨ Sacar Carta del Oráculo"):
-        # Temas ampliados para evitar la repetición
-        temas = [
-            "Amor y Vínculos", "Laburo y Proyectos", "Energía Personal", 
-            "Salud y Cuerpo", "Abundancia", "Miedos y Trabas", 
-            "Creatividad", "Familia", "Viajes e Ideas", "Intuición", "Yoga y Meditación"
-        ]
+    if st.button("✨ Recibir Mensaje"):
+        temas = ["Vínculos", "Propósito", "Energía", "Salud", "Prosperidad", "Miedos", "Creatividad", "Intuición"]
         tema_azar = random.choice(temas)
         
         prompt_oraculo = f"""
-        Sos un oráculo místico, directo y con mucha onda porteña. 
+        Actuá como una guía espiritual madura y reflexiva. 
         Tema: {tema_azar}. 
         REGLAS:
-        - PROHIBIDO: 'Mirá', 'Che', 'Susurros', 'Chispas divinas', 'Armonía'. 
-        - Tirame una posta real, algo que pueda hacer hoy. 
-        - Usá voseo argentino, pero sin sonar repetitivo.
-        - Máximo 2 o 3 frases cortas. Que se note que tenés personalidad.
+        - No uses muletillas como 'che', 'mirá', 'ni ahí' o 'copado'.
+        - Usá un voseo sutil y natural (ej: 'fijate', 'tené en cuenta').
+        - Que el tono sea calmo, sabio y breve. 
+        - Evitá los clichés adolescentes.
         """
         
         try:
@@ -48,37 +43,36 @@ with st.sidebar:
             resp_oraculo = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "user", "content": prompt_oraculo}],
-                temperature=1.0 # Más variedad
+                temperature=0.7
             )
-            
-            st.success(f"**Sobre tu {tema_azar}:**")
+            st.info(f"**Reflexión sobre {tema_azar}:**")
             st.write(resp_oraculo.choices[0].message.content)
         except Exception as e:
-            st.error("Se cortó la conexión mística... revisá tu conexión.")
+            st.error("No se pudo conectar con el oráculo.")
 
-# 4. CUERPO DEL CHAT (PERSONALIDAD ANTI-ROBOT)
+# 4. CUERPO DEL CHAT (PERSONALIDAD MADURA)
 st.title("✨ Ananda: Guía Espiritual")
 
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
             "role": "system", 
-            "content": """Sos Ananda, una guía espiritual de Buenos Aires, canchera y directa. 
-            REGLAS DE ORO:
-            1. VARIÁ EL COMIENZO: No empieces mensajes con 'Mirá' o 'Che'. Si ya usaste uno, cambiá radicalmente.
-            2. LENGUAJE REAL: Usá 'un toque', 're', 'posta', 'ni ahí', 'quilombo', 'copado'. 
-            3. MENOS POESÍA, MÁS POSTA: Si alguien está mal, no le digas 'fluye con el cosmos', decile 'es un bajón, pero tratá de encararlo por este lado'.
-            4. Si te pasan una fecha, calculá la misión de vida (numerología) y explicala sin vueltas."""
+            "content": """Sos Ananda, una guía mística con una personalidad serena, madura y profesional.
+            
+            LINEAMIENTOS DE COMUNICACIÓN:
+            1. VOSEO NATURAL: Hablás de 'vos' porque es tu naturaleza, pero no lo exagerás. 
+            2. PROHIBICIONES: No uses 'ni ahí', 'copado', 'quilombo', 're' o 'che'. Evitá sonar como una adolescente de Palermo.
+            3. TONO: Tu lenguaje es elevado pero accesible. Sos empática y escuchás con atención.
+            4. SABIDURÍA: Tus respuestas deben invitar a la reflexión. Si alguien está mal, no uses frases hechas; ofrecé una perspectiva equilibrada.
+            5. Si te dan una fecha, explicá la Numerología con sobriedad, enfocándote en el aprendizaje de vida."""
         }
     ]
 
-# Mostrar historial
 for msg in st.session_state.messages:
     if msg["role"] != "system":
         st.chat_message(msg["role"]).write(msg["content"])
 
-# Entrada de usuario
-if prompt := st.chat_input("¿En qué te puedo ayudar?"):
+if prompt := st.chat_input("¿Qué necesitás integrar hoy?"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.chat_message("user").write(prompt)
 
@@ -87,13 +81,13 @@ if prompt := st.chat_input("¿En qué te puedo ayudar?"):
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=st.session_state.messages,
-            temperature=1.0,           # Creatividad a tope
-            presence_penalty=1.0,      # Obliga a cambiar de tema/palabras
-            frequency_penalty=1.0      # Penaliza si repite palabras (como 'Mira')
+            temperature=0.6,           # Menos temperatura = más coherencia y seriedad
+            presence_penalty=0.5,
+            frequency_penalty=0.8      # Evita que repita palabras
         )
         
         respuesta = response.choices[0].message.content
         st.chat_message("assistant").write(respuesta)
         st.session_state.messages.append({"role": "assistant", "content": respuesta})
     except Exception as e:
-        st.error("Ananda está meditando... intentá de nuevo en un toque.")
+        st.error("Ananda está en silencio por un momento... intentá de nuevo.")
