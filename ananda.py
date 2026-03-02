@@ -6,12 +6,12 @@ import base64
 from datetime import datetime
 from dotenv import load_dotenv
 
-# 1. CONFIGURACIÓN
+# 1. CONFIGURACIÓN INICIAL
 load_dotenv()
 api_key = os.getenv("GROQ_API_KEY")
-st.set_page_config(page_title="Ananda: Mentor Akáshico", page_icon="📖", layout="wide")
+st.set_page_config(page_title="Ananda: Mentora Akáshica", page_icon="📖", layout="wide")
 
-# Gestión de Base de Datos
+# --- GESTIÓN DE BASE DE DATOS ---
 def init_db():
     conn = sqlite3.connect('ananda_akasha.db')
     c = conn.cursor()
@@ -74,7 +74,7 @@ def encode_image(image_file):
 
 init_db()
 
-# 2. PANEL LATERAL (Gestión de Chats)
+# 2. PANEL LATERAL (SIDEBAR)
 with st.sidebar:
     st.title("📚 Mis Registros")
     if st.button("➕ Nueva Consulta", use_container_width=True):
@@ -96,85 +96,102 @@ with st.sidebar:
                     del st.session_state.current_session
                 st.rerun()
 
-# 3. LÓGICA DE SESIÓN
+# 3. LÓGICA DE NAVEGACIÓN
 if "current_session" not in st.session_state:
-    if sessions: st.session_state.current_session = sessions[0][0]
-    else: st.session_state.current_session = create_session()
+    if sessions:
+        st.session_state.current_session = sessions[0][0]
+    else:
+        st.session_state.current_session = create_session()
 
 chat_history = load_messages(st.session_state.current_session)
 
+# PROMPT DE PERSONALIDAD
 system_prompt = {
     "role": "system", 
     "content": """Sos Ananda, mentora en Registros Akáshicos experta en decodificación simbólica.
     
-    PROTOCOLO:
-    1. SI HAY IMAGEN: Analizá formas y colores. Preguntá qué sintió la lectora al dibujar.
-    2. INDAGACIÓN: Hacé 4 preguntas clave antes de interpretar.
-    3. DEVOLUCIÓN: Ofrecé una interpretación y preguntá si resuena.
-    4. TONO: Voseo maduro, profesional y breve."""
+    PROTOCOLO DE TRABAJO:
+    1. SI HAY IMAGEN: Analizá formas, trazos y colores. Preguntá qué sintió la lectora mientras dibujaba.
+    2. INDAGACIÓN: Si la visión es nueva, hacé exactamente 4 preguntas clave para contextualizar antes de interpretar.
+    3. DEVOLUCIÓN: Una vez que tengas contexto, ofrecé una interpretación integradora. 
+    4. VALIDACIÓN: Al final, preguntá siempre si la interpretación le hace sentido.
+    
+    TONO: Voseo natural (hablás de vos), profesional, serena y concisa (máximo 2 párrafos)."""
 }
 
 st.title("📖 Ananda: Mentor de Registros")
+st.caption("Subí tus dibujos o escribí tus visiones para decodificarlas juntas.")
 
+# Mostrar chat
 for msg in chat_history:
     st.chat_message(msg["role"]).write(msg["content"])
 
 # 4. ENTRADA DE USUARIO
 with st.container():
-    col1, col2 = st.columns([0.85, 0.15])
-    with col2:
+    col_in, col_file = st.columns([0.85, 0.15])
+    with col_file:
         uploaded_file = st.file_uploader("🖼️", type=["png", "jpg", "jpeg"], label_visibility="collapsed")
-    with col1:
+    with col_in:
         prompt = st.chat_input("¿Qué bajó en el registro?")
 
 if prompt or uploaded_file:
-    full_prompt = prompt if prompt else "Analizá este dibujo de mi sesión."
-    st.chat_message("user").write(full_prompt)
-    if uploaded_file: st.image(uploaded_file, width=300)
+    # Preparar el texto del usuario
+    user_text = prompt if prompt else "Analizá este dibujo que bajé en mi sesión."
+    st.chat_message("user").write(user_text)
+    if uploaded_file:
+        st.image(uploaded_file, width=300)
     
-    save_message(st.session_state.current_session, "user", full_prompt)
+    # Guardar mensaje del usuario
+    save_message(st.session_state.current_session, "user", user_text)
     
-    # Generar Título
+    # Generar Título Automático si es el primer mensaje
     if len(chat_history) == 0:
         try:
             client = Groq(api_key=api_key)
             title_gen = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": f"Título de 3 palabras para: {full_prompt}"}],
+                messages=[{"role": "user", "content": f"Generá un título de 3 palabras para esta consulta: {user_text}"}],
                 max_tokens=10
             )
-            update_session_name(st.session_state.current_session, title_gen.choices[0].message.content.strip().replace('"', ''))
-        except: pass
+            nuevo_titulo = title_gen.choices[0].message.content.strip().replace('"', '')
+            update_session_name(st.session_state.current_session, nuevo_titulo)
+        except:
+            pass
 
-    # Respuesta de la IA
+    # RESPUESTA DE ANANDA
     try:
         client = Groq(api_key=api_key)
+        
         if uploaded_file:
+            # MODELO DE VISIÓN CORREGIDO (Activo a hoy)
+            model_to_use = "llama-3.2-11b-vision-preview"
             base64_image = encode_image(uploaded_file)
-            # CAMBIO AQUÍ: Usamos el modelo Vision más reciente y activo
-            model_to_use = "llama-3.2-90b-vision-preview"
             messages = [
                 system_prompt,
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": full_prompt},
+                        {"type": "text", "text": user_text},
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
                     ]
                 }
             ]
         else:
+            # MODELO DE TEXTO
             model_to_use = "llama-3.3-70b-versatile"
-            messages = [system_prompt] + chat_history + [{"role": "user", "content": full_prompt}]
+            messages = [system_prompt] + chat_history + [{"role": "user", "content": user_text}]
 
         response = client.chat.completions.create(
             model=model_to_use,
             messages=messages,
-            temperature=0.5
+            temperature=0.5,
+            max_tokens=500
         )
+        
         ans = response.choices[0].message.content
         st.chat_message("assistant").write(ans)
         save_message(st.session_state.current_session, "assistant", ans)
-        st.rerun()
+        st.rerun() # Recargamos para actualizar el historial y títulos
+        
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Error en la conexión mística: {e}")
