@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 api_key = os.getenv("GROQ_API_KEY")
 
-st.set_page_config(page_title="Ananda: Mentor Akáshico", page_icon="🌙", layout="wide")
+st.set_page_config(page_title="Ananda: Mentora Espiritual", page_icon="🌙", layout="wide")
 
 # --- CSS CORREGIDO (Seguro para el Sidebar) ---
 # --- CSS TOTAL PARA CELULARES Y COMPU ---
@@ -222,3 +222,4 @@ if user_input:
 
     except Exception as e:
         st.error(f"Se cortó la conexión: {e}")
+
