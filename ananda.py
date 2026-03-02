@@ -13,14 +13,30 @@ api_key = os.getenv("GROQ_API_KEY")
 st.set_page_config(page_title="Ananda: Mentor Akáshico", page_icon="🌙", layout="wide")
 
 # --- CSS CORREGIDO (Seguro para el Sidebar) ---
+# --- CSS TOTAL PARA CELULARES Y COMPU ---
 st.markdown("""
     <style>
+    /* Oculta el menú de 3 puntitos y el footer */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     .stAppDeployButton {display:none;}
-    /* Dejamos que el header exista pero que no moleste visualmente */
-    [data-testid="stHeader"] {
-        background-color: rgba(0,0,0,0) !important;
+    
+    # [data-testid="stHeader"] {
+        display: none !important;
+    }
+
+    /* Asegura que el contenido empiece bien arriba */
+    .block-container {
+        padding-top: 1rem !important;
+        padding-bottom: 0rem !important;
+    }
+
+    /* El botón del sidebar suele quedar enterrado, lo rescatamos */
+    .st-emotion-cache-6q9sum {
+        visibility: visible !important;
+        color: #666 !important;
+        background-color: rgba(255,255,255,0.8);
+        border-radius: 50%;
     }
     </style>
     """, unsafe_allow_html=True)
