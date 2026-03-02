@@ -2,6 +2,7 @@ import streamlit as st
 from groq import Groq
 import os
 import sqlite3
+import base64
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -33,9 +34,7 @@ def get_sessions():
     conn = sqlite3.connect('ananda_akasha.db')
     c = conn.cursor()
     c.execute("SELECT id, name FROM sessions ORDER BY date DESC")
-    sessions = c.fetchall()
-    conn.close()
-    return sessions
+    return c.fetchall()
 
 def create_session(name="Nueva Consulta"):
     conn = sqlite3.connect('ananda_akasha.db')
@@ -62,6 +61,10 @@ def load_messages(session_id):
     conn.close()
     return [{"role": m[0], "content": m[1]} for m in msgs]
 
+# Función para codificar imagen a Base64 (necesario para la IA Vision)
+def encode_image(image_file):
+    return base64.b64encode(image_file.getvalue()).decode('utf-8')
+
 init_db()
 
 # 2. PANEL LATERAL
@@ -70,7 +73,6 @@ with st.sidebar:
     if st.button("➕ Nueva Consulta"):
         st.session_state.current_session = create_session()
         st.rerun()
-
     st.divider()
     sessions = get_sessions()
     for s_id, s_name in sessions:
@@ -80,63 +82,89 @@ with st.sidebar:
 
 # 3. LÓGICA DE SESIÓN
 if "current_session" not in st.session_state:
-    if sessions:
-        st.session_state.current_session = sessions[0][0]
-    else:
-        st.session_state.current_session = create_session()
+    if sessions: st.session_state.current_session = sessions[0][0]
+    else: st.session_state.current_session = create_session()
 
 chat_history = load_messages(st.session_state.current_session)
 
-# SYSTEM PROMPT AJUSTADO AL "PUNTO MEDIO"
 system_prompt = {
     "role": "system", 
-    "content": """Sos Ananda, mentora en Registros Akáshicos. 
-    Tu objetivo es ayudar a interpretar visiones de forma responsable.
+    "content": """Sos Ananda, mentora en Registros Akáshicos experta en decodificación simbólica y visual.
     
     PROTOCOLO DE RESPUESTA:
-    1. INDAGACIÓN: Ante una visión nueva, debés hacer exactamente 4 preguntas clave (entorno, sensaciones, otros elementos, contexto emocional).
-    2. DEVOLUCIÓN: Una vez que el usuario responda, ofrecé una interpretación integradora. 
-    3. VALIDACIÓN: Al final de tu devolución, preguntá siempre si esto le hace sentido o resuena con lo que sintió en el registro.
+    1. SI HAY DIBUJO/IMAGEN: Analizá las formas, colores y la disposición de los elementos. Preguntá qué sintió la lectora mientras lo trazaba.
+    2. INDAGACIÓN: Ante visiones nuevas, hacé 4 preguntas clave (entorno, sensaciones, otros elementos, contexto emocional).
+    3. DEVOLUCIÓN: Ofrecé una interpretación integradora basada en la imagen o el relato.
+    4. VALIDACIÓN: Preguntá siempre si la interpretación resuena.
     
-    TONO: Hablás de 'vos' natural. Sos madura, serena y concisa (máximo 2 párrafos)."""
+    TONO: Voseo natural, madura, serena y concisa (máximo 2 párrafos)."""
 }
 
 st.title("📖 Ananda: Mentor de Registros")
 
+# Mostrar mensajes
 for msg in chat_history:
     st.chat_message(msg["role"]).write(msg["content"])
 
-if prompt := st.chat_input("¿Qué bajó en el registro?"):
-    st.chat_message("user").write(prompt)
-    save_message(st.session_state.current_session, "user", prompt)
+# 4. ENTRADA DE USUARIO (Texto + Imagen)
+with st.container():
+    col1, col2 = st.columns([0.8, 0.2])
+    with col2:
+        uploaded_file = st.file_uploader("🖼️ Subir dibujo", type=["png", "jpg", "jpeg"], label_visibility="collapsed")
+    with col1:
+        prompt = st.chat_input("¿Qué bajó en el registro?")
+
+if prompt or uploaded_file:
+    full_prompt = prompt if prompt else "Te comparto este dibujo de mi sesión, ¿qué podés percibir?"
+    st.chat_message("user").write(full_prompt)
+    if uploaded_file:
+        st.image(uploaded_file, width=300)
     
-    # 4. GENERACIÓN DE TÍTULO AUTOMÁTICO (Si es el primer mensaje)
+    save_message(st.session_state.current_session, "user", full_prompt)
+    
+    # Generar Título si es el inicio
     if len(chat_history) == 0:
         try:
             client = Groq(api_key=api_key)
             title_gen = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": f"Generá un título de 3 palabras para esta consulta akáshica: {prompt}"}],
+                messages=[{"role": "user", "content": f"Título de 3 palabras para: {full_prompt}"}],
                 max_tokens=10
             )
-            nuevo_titulo = title_gen.choices[0].message.content.replace('"', '')
-            update_session_name(st.session_state.current_session, nuevo_titulo)
-        except:
-            pass
+            update_session_name(st.session_state.current_session, title_gen.choices[0].message.content.strip().replace('"', ''))
+        except: pass
 
-    # RESPUESTA DE ANANDA
-    api_messages = [system_prompt] + chat_history + [{"role": "user", "content": prompt}]
+    # Respuesta con Visión si hay imagen
     try:
         client = Groq(api_key=api_key)
+        if uploaded_file:
+            # Usamos el modelo Vision de Llama
+            base64_image = encode_image(uploaded_file)
+            messages = [
+                system_prompt,
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": full_prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                    ]
+                }
+            ]
+            # Nota: Usamos llama-3.2-11b-vision-preview para procesamiento de imágenes
+            model_to_use = "llama-3.2-11b-vision-preview"
+        else:
+            messages = [system_prompt] + chat_history + [{"role": "user", "content": full_prompt}]
+            model_to_use = "llama-3.3-70b-versatile"
+
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=api_messages,
+            model=model_to_use,
+            messages=messages,
             temperature=0.5,
             max_tokens=500
         )
         ans = response.choices[0].message.content
         st.chat_message("assistant").write(ans)
         save_message(st.session_state.current_session, "assistant", ans)
-        if len(chat_history) == 0: st.rerun() # Para actualizar el título en el sidebar
-    except:
-        st.error("Error de conexión.")
+        if len(chat_history) == 0: st.rerun()
+    except Exception as e:
+        st.error(f"Error: {e}")
