@@ -127,8 +127,8 @@ with st.sidebar:
     
     st.subheader("Herramientas Sagradas")
     if st.button("🃏 Tarot del Día", use_container_width=True):
-        action_prompt = f"Ananda, bajo esta Luna {luna_nombre}, tirame 3 cartas de tarot simbólicas. ✨"
-    if st.button("🕯️ Ritual Lunar", use_container_width=True):
+        action_prompt = f"Ananda, tirame 3 cartas de tarot simbólicas. ✨"
+    if st.button("🕯️ Ritualito", use_container_width=True):
         action_prompt = f"Sugerime un ritual específico para esta fase de Luna {luna_nombre}. 🌿"
     if st.button("🌌 Mensaje Guía", use_container_width=True):
         action_prompt = "Ananda, bajá un mensaje universal para mi alma hoy. ☁️"
@@ -169,7 +169,7 @@ if "current_session" not in st.session_state:
     else: st.session_state.current_session = create_session()
 
 # 3. INTERFAZ PRINCIPAL
-st.title("📖 Ananda: Mentor de Registros")
+st.title("📖 Ananda: Mentora espiritual 🌿")
 st.caption(f"Un espacio sagrado bajo la luz de la Luna {luna_nombre} ✨")
 
 chat_history = load_messages(st.session_state.current_session)
@@ -222,4 +222,5 @@ if user_input:
 
     except Exception as e:
         st.error(f"Se cortó la conexión: {e}")
+
 
