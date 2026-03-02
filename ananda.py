@@ -3,30 +3,41 @@ from groq import Groq
 import os
 import sqlite3
 from datetime import datetime
-import math # Para calcular la fase lunar de forma sencilla
+import math
 from dotenv import load_dotenv
 
-# 1. CONFIGURACIÓN
+# 1. CONFIGURACIÓN Y ESTÉTICA
 load_dotenv()
 api_key = os.getenv("GROQ_API_KEY")
+
 st.set_page_config(page_title="Ananda: Mentor Akáshico", page_icon="🌙", layout="wide")
+
+# --- CSS CORREGIDO (Seguro para el Sidebar) ---
+st.markdown("""
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    .stAppDeployButton {display:none;}
+    /* Dejamos que el header exista pero que no moleste visualmente */
+    [data-testid="stHeader"] {
+        background-color: rgba(0,0,0,0) !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 # --- LÓGICA LUNAR ---
 def get_lunar_phase():
-    """Calcula la fase lunar aproximada basada en la fecha actual"""
-    # Fecha de referencia: Luna Nueva el 6 de enero de 2000
     diff = datetime.now() - datetime(2000, 1, 6)
     days = diff.days + diff.seconds / 86400.0
     lunation = days % 29.530588853
-    
     if lunation < 1.84: return "Nueva 🌑", "Ideal para intencionar y sembrar semillas de luz."
-    elif lunation < 5.53: return "Creciente 🌒", "Momento de dar los primeros pasos y nutrir tus proyectos."
-    elif lunation < 9.22: return "Cuarto Creciente 🌓", "Energía de acción y superación de obstáculos."
-    elif lunation < 12.91: return "Gibosa Creciente 🌔", "Perfeccionamiento y gestación final."
-    elif lunation < 16.61: return "Llena 🌕", "Culminación, claridad total y agradecimiento."
-    elif lunation < 20.30: return "Gibosa Menguante 🌖", "Compartir frutos y reflexionar sobre lo aprendido."
-    elif lunation < 23.99: return "Cuarto Menguante 🌗", "Soltar, perdonar y liberar lo que ya no vibra con vos."
-    elif lunation < 27.68: return "Vinculante 🌘", "Descanso profundo y preparación para el nuevo ciclo."
+    elif lunation < 5.53: return "Creciente 🌒", "Momento de dar los primeros pasos."
+    elif lunation < 9.22: return "Cuarto Creciente 🌓", "Energía de acción y superación."
+    elif lunation < 12.91: return "Gibosa Creciente 🌔", "Perfeccionamiento y gestación."
+    elif lunation < 16.61: return "Llena 🌕", "Culminación y claridad total."
+    elif lunation < 20.30: return "Gibosa Menguante 🌖", "Compartir y reflexionar."
+    elif lunation < 23.99: return "Cuarto Menguante 🌗", "Soltar y liberar lo viejo."
+    elif lunation < 27.68: return "Vinculante 🌘", "Descanso y preparación."
     else: return "Nueva 🌑", "Intenciones puras."
 
 luna_nombre, luna_consejo = get_lunar_phase()
@@ -91,16 +102,27 @@ def load_messages(session_id):
 
 init_db()
 
-# 2. PANEL LATERAL
+# 2. PANEL LATERAL (SIDEBAR)
+action_prompt = None
+
 with st.sidebar:
-    st.title("📚 Registros")
-    # Indicador Lunar Discreto
+    st.title("🌙 Oráculo Lunar")
     st.info(f"**Luna Actual:** {luna_nombre}\n\n*{luna_consejo}*")
     
+    st.subheader("Herramientas Sagradas")
+    if st.button("🃏 Tarot del Día", use_container_width=True):
+        action_prompt = f"Ananda, bajo esta Luna {luna_nombre}, tirame 3 cartas de tarot simbólicas. ✨"
+    if st.button("🕯️ Ritual Lunar", use_container_width=True):
+        action_prompt = f"Sugerime un ritual específico para esta fase de Luna {luna_nombre}. 🌿"
+    if st.button("🌌 Mensaje Guía", use_container_width=True):
+        action_prompt = "Ananda, bajá un mensaje universal para mi alma hoy. ☁️"
+    
+    st.divider()
+    st.subheader("Historial de Registros")
     if st.button("➕ Nueva Consulta", use_container_width=True):
         st.session_state.current_session = create_session()
         st.rerun()
-    st.divider()
+    
     sessions = get_sessions()
     for s_id, s_name in sessions:
         cols = st.columns([0.8, 0.2])
@@ -113,53 +135,50 @@ with st.sidebar:
                 delete_session(s_id)
                 st.rerun()
 
+    # --- BOTÓN CAFECITO ---
+    st.divider()
+    st.markdown("""
+        <div style="text-align: center;">
+            <p style="font-size: 0.9em; color: #666;">¿Te sirvió la guía de Ananda? ✨</p>
+            <a href="https://cafecito.app/yogaroots" target="_blank">
+                <img src="https://cdn.cafecito.app/imgs/buttons/button_5.png" 
+                     alt="Invitame un café" 
+                     style="width: 150px; border-radius: 10px;">
+            </a>
+        </div>
+    """, unsafe_allow_html=True)
+
 if "current_session" not in st.session_state:
     if sessions: st.session_state.current_session = sessions[0][0]
     else: st.session_state.current_session = create_session()
 
-# 3. INTERFAZ DE ANANDA
-st.title("📖 Ananda: Oráculo Akáshico")
-st.caption(f"Acompañando tu proceso bajo la luz de la Luna {luna_nombre} ✨")
+# 3. INTERFAZ PRINCIPAL
+st.title("📖 Ananda: Mentor de Registros")
+st.caption(f"Un espacio sagrado bajo la luz de la Luna {luna_nombre} ✨")
 
 chat_history = load_messages(st.session_state.current_session)
 
-# --- BOTONES DE PODER ---
-c1, c2, c3 = st.columns(3)
-action_prompt = None
-
-with c1:
-    if st.button("🃏 Tarot del Día", use_container_width=True):
-        action_prompt = f"Ananda, bajo esta Luna {luna_nombre}, tirame 3 cartas de tarot. ✨"
-with c2:
-    if st.button("🕯️ Ritual Lunar", use_container_width=True):
-        action_prompt = f"Sugerime un ritual específico para esta fase de Luna {luna_nombre}. 🌿"
-with c3:
-    if st.button("🌌 Mensaje Guía", use_container_width=True):
-        action_prompt = "Ananda, bajá un mensaje universal para mi alma hoy. ☁️"
-
-# Mostrar historial
 for msg in chat_history:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# Entrada de usuario
-if prompt := (action_prompt if action_prompt else st.chat_input("Escribí tu consulta acá...")):
-    st.chat_message("user").markdown(prompt)
-    save_message(st.session_state.current_session, "user", prompt)
+user_input = action_prompt if action_prompt else st.chat_input("Escribí tu visión o consulta acá...")
+
+if user_input:
+    st.chat_message("user").markdown(user_input)
+    save_message(st.session_state.current_session, "user", user_input)
     
-    # Título automático
     if len(chat_history) == 0:
         try:
             client = Groq(api_key=api_key)
             t_gen = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": f"Título corto para: {prompt}"}],
+                messages=[{"role": "user", "content": f"Título corto (3 palabras) para: {user_input}"}],
                 max_tokens=10
             )
-            update_session_name(st.session_state.current_session, t_gen.choices[0].message.content.strip())
+            update_session_name(st.session_state.current_session, t_gen.choices[0].message.content.strip().replace('"', ''))
         except: pass
 
-    # CEREBRO DE ANANDA LUNAR
     try:
         client = Groq(api_key=api_key)
         system_prompt = {
@@ -167,15 +186,12 @@ if prompt := (action_prompt if action_prompt else st.chat_input("Escribí tu con
             "content": f"""Sos Ananda, mentora y oráculo akáshico. 🔮
             Hoy estamos bajo la influencia de la Luna {luna_nombre}. 🌙
             
-            REGLAS LUNARES:
-            - Si te piden un RITUAL, debe estar alineado con la fase {luna_nombre}.
-            - Si te piden TAROT, integrá el significado de la luna en la lectura.
-            - Si traen una VISIÓN de registros, usá el protocolo de 4 preguntas (una por una).
+            DINÁMICA DE CHARLA: Hacé UNA sola pregunta por vez (Entorno -> Cuerpo -> Emoción -> Elementos). 🌿
             
-            TONO: Dulce, maduro, poético y profesional. Voseo natural. Usá emoticones delicados. ✨🌿"""
+            TONO: Dulce, madura, profesional y muy delicada. Usá emoticones."""
         }
         
-        api_messages = [system_prompt] + chat_history + [{"role": "user", "content": prompt}]
+        api_messages = [system_prompt] + chat_history + [{"role": "user", "content": user_input}]
         
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
