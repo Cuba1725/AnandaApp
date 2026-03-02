@@ -2,16 +2,36 @@ import streamlit as st
 from groq import Groq
 import os
 import sqlite3
-import base64
 from datetime import datetime
+import math # Para calcular la fase lunar de forma sencilla
 from dotenv import load_dotenv
 
-# 1. CONFIGURACIÓN INICIAL
+# 1. CONFIGURACIÓN
 load_dotenv()
 api_key = os.getenv("GROQ_API_KEY")
-st.set_page_config(page_title="Ananda: Mentora Akáshica", page_icon="📖", layout="wide")
+st.set_page_config(page_title="Ananda: Mentor Akáshico", page_icon="🌙", layout="wide")
 
-# --- GESTIÓN DE BASE DE DATOS ---
+# --- LÓGICA LUNAR ---
+def get_lunar_phase():
+    """Calcula la fase lunar aproximada basada en la fecha actual"""
+    # Fecha de referencia: Luna Nueva el 6 de enero de 2000
+    diff = datetime.now() - datetime(2000, 1, 6)
+    days = diff.days + diff.seconds / 86400.0
+    lunation = days % 29.530588853
+    
+    if lunation < 1.84: return "Nueva 🌑", "Ideal para intencionar y sembrar semillas de luz."
+    elif lunation < 5.53: return "Creciente 🌒", "Momento de dar los primeros pasos y nutrir tus proyectos."
+    elif lunation < 9.22: return "Cuarto Creciente 🌓", "Energía de acción y superación de obstáculos."
+    elif lunation < 12.91: return "Gibosa Creciente 🌔", "Perfeccionamiento y gestación final."
+    elif lunation < 16.61: return "Llena 🌕", "Culminación, claridad total y agradecimiento."
+    elif lunation < 20.30: return "Gibosa Menguante 🌖", "Compartir frutos y reflexionar sobre lo aprendido."
+    elif lunation < 23.99: return "Cuarto Menguante 🌗", "Soltar, perdonar y liberar lo que ya no vibra con vos."
+    elif lunation < 27.68: return "Vinculante 🌘", "Descanso profundo y preparación para el nuevo ciclo."
+    else: return "Nueva 🌑", "Intenciones puras."
+
+luna_nombre, luna_consejo = get_lunar_phase()
+
+# --- BASE DE DATOS ---
 def init_db():
     conn = sqlite3.connect('ananda_akasha.db')
     c = conn.cursor()
@@ -69,129 +89,104 @@ def load_messages(session_id):
     conn.close()
     return [{"role": m[0], "content": m[1]} for m in msgs]
 
-def encode_image(image_file):
-    return base64.b64encode(image_file.getvalue()).decode('utf-8')
-
 init_db()
 
-# 2. PANEL LATERAL (SIDEBAR)
+# 2. PANEL LATERAL
 with st.sidebar:
-    st.title("📚 Mis Registros")
+    st.title("📚 Registros")
+    # Indicador Lunar Discreto
+    st.info(f"**Luna Actual:** {luna_nombre}\n\n*{luna_consejo}*")
+    
     if st.button("➕ Nueva Consulta", use_container_width=True):
         st.session_state.current_session = create_session()
         st.rerun()
     st.divider()
-    
     sessions = get_sessions()
     for s_id, s_name in sessions:
-        col_select, col_del = st.columns([0.8, 0.2])
-        with col_select:
-            if st.button(f"📖 {s_name}", key=f"sess_{s_id}", use_container_width=True):
+        cols = st.columns([0.8, 0.2])
+        with cols[0]:
+            if st.button(f"📖 {s_name}", key=f"s_{s_id}", use_container_width=True):
                 st.session_state.current_session = s_id
                 st.rerun()
-        with col_del:
-            if st.button("🗑️", key=f"del_{s_id}"):
+        with cols[1]:
+            if st.button("🗑️", key=f"d_{s_id}"):
                 delete_session(s_id)
-                if st.session_state.get("current_session") == s_id:
-                    del st.session_state.current_session
                 st.rerun()
 
-# 3. LÓGICA DE NAVEGACIÓN
 if "current_session" not in st.session_state:
-    if sessions:
-        st.session_state.current_session = sessions[0][0]
-    else:
-        st.session_state.current_session = create_session()
+    if sessions: st.session_state.current_session = sessions[0][0]
+    else: st.session_state.current_session = create_session()
+
+# 3. INTERFAZ DE ANANDA
+st.title("📖 Ananda: Oráculo Akáshico")
+st.caption(f"Acompañando tu proceso bajo la luz de la Luna {luna_nombre} ✨")
 
 chat_history = load_messages(st.session_state.current_session)
 
-# PROMPT DE PERSONALIDAD
-system_prompt = {
-    "role": "system", 
-    "content": """Sos Ananda, mentora en Registros Akáshicos experta en decodificación simbólica.
-    
-    PROTOCOLO DE TRABAJO:
-    1. SI HAY IMAGEN: Analizá formas, trazos y colores. Preguntá qué sintió la lectora mientras dibujaba.
-    2. INDAGACIÓN: Si la visión es nueva, hacé exactamente 4 preguntas clave para contextualizar antes de interpretar.
-    3. DEVOLUCIÓN: Una vez que tengas contexto, ofrecé una interpretación integradora. 
-    4. VALIDACIÓN: Al final, preguntá siempre si la interpretación le hace sentido.
-    
-    TONO: Voseo natural (hablás de vos), profesional, serena y concisa (máximo 2 párrafos)."""
-}
+# --- BOTONES DE PODER ---
+c1, c2, c3 = st.columns(3)
+action_prompt = None
 
-st.title("📖 Ananda: Mentor de Registros")
-st.caption("Subí tus dibujos o escribí tus visiones para decodificarlas juntas.")
+with c1:
+    if st.button("🃏 Tarot del Día", use_container_width=True):
+        action_prompt = f"Ananda, bajo esta Luna {luna_nombre}, tirame 3 cartas de tarot. ✨"
+with c2:
+    if st.button("🕯️ Ritual Lunar", use_container_width=True):
+        action_prompt = f"Sugerime un ritual específico para esta fase de Luna {luna_nombre}. 🌿"
+with c3:
+    if st.button("🌌 Mensaje Guía", use_container_width=True):
+        action_prompt = "Ananda, bajá un mensaje universal para mi alma hoy. ☁️"
 
-# Mostrar chat
+# Mostrar historial
 for msg in chat_history:
-    st.chat_message(msg["role"]).write(msg["content"])
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
 
-# 4. ENTRADA DE USUARIO
-with st.container():
-    col_in, col_file = st.columns([0.85, 0.15])
-    with col_file:
-        uploaded_file = st.file_uploader("🖼️", type=["png", "jpg", "jpeg"], label_visibility="collapsed")
-    with col_in:
-        prompt = st.chat_input("¿Qué bajó en el registro?")
-
-if prompt or uploaded_file:
-    # Preparar el texto del usuario
-    user_text = prompt if prompt else "Analizá este dibujo que bajé en mi sesión."
-    st.chat_message("user").write(user_text)
-    if uploaded_file:
-        st.image(uploaded_file, width=300)
+# Entrada de usuario
+if prompt := (action_prompt if action_prompt else st.chat_input("Escribí tu consulta acá...")):
+    st.chat_message("user").markdown(prompt)
+    save_message(st.session_state.current_session, "user", prompt)
     
-    # Guardar mensaje del usuario
-    save_message(st.session_state.current_session, "user", user_text)
-    
-    # Generar Título Automático si es el primer mensaje
+    # Título automático
     if len(chat_history) == 0:
         try:
             client = Groq(api_key=api_key)
-            title_gen = client.chat.completions.create(
+            t_gen = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": f"Generá un título de 3 palabras para esta consulta: {user_text}"}],
+                messages=[{"role": "user", "content": f"Título corto para: {prompt}"}],
                 max_tokens=10
             )
-            nuevo_titulo = title_gen.choices[0].message.content.strip().replace('"', '')
-            update_session_name(st.session_state.current_session, nuevo_titulo)
-        except:
-            pass
+            update_session_name(st.session_state.current_session, t_gen.choices[0].message.content.strip())
+        except: pass
 
-    # RESPUESTA DE ANANDA
+    # CEREBRO DE ANANDA LUNAR
     try:
         client = Groq(api_key=api_key)
+        system_prompt = {
+            "role": "system", 
+            "content": f"""Sos Ananda, mentora y oráculo akáshico. 🔮
+            Hoy estamos bajo la influencia de la Luna {luna_nombre}. 🌙
+            
+            REGLAS LUNARES:
+            - Si te piden un RITUAL, debe estar alineado con la fase {luna_nombre}.
+            - Si te piden TAROT, integrá el significado de la luna en la lectura.
+            - Si traen una VISIÓN de registros, usá el protocolo de 4 preguntas (una por una).
+            
+            TONO: Dulce, maduro, poético y profesional. Voseo natural. Usá emoticones delicados. ✨🌿"""
+        }
         
-        if uploaded_file:
-            # MODELO DE VISIÓN CORREGIDO (Activo a hoy)
-            model_to_use = "llama-3.2-11b-vision-preview"
-            base64_image = encode_image(uploaded_file)
-            messages = [
-                system_prompt,
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": user_text},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-                    ]
-                }
-            ]
-        else:
-            # MODELO DE TEXTO
-            model_to_use = "llama-3.3-70b-versatile"
-            messages = [system_prompt] + chat_history + [{"role": "user", "content": user_text}]
-
+        api_messages = [system_prompt] + chat_history + [{"role": "user", "content": prompt}]
+        
         response = client.chat.completions.create(
-            model=model_to_use,
-            messages=messages,
-            temperature=0.5,
-            max_tokens=500
+            model="llama-3.3-70b-versatile",
+            messages=api_messages,
+            temperature=0.7
         )
         
         ans = response.choices[0].message.content
-        st.chat_message("assistant").write(ans)
+        st.chat_message("assistant").markdown(ans)
         save_message(st.session_state.current_session, "assistant", ans)
-        st.rerun() # Recargamos para actualizar el historial y títulos
-        
+        st.rerun()
+
     except Exception as e:
-        st.error(f"Error en la conexión mística: {e}")
+        st.error(f"Se cortó la conexión: {e}")
